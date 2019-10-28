@@ -22,7 +22,7 @@ function varargout = bid(varargin)
 
 % Edit the above text to modify the response to help bid
 
-% Last Modified by GUIDE v2.5 22-Oct-2019 15:00:02
+% Last Modified by GUIDE v2.5 28-Oct-2019 14:38:59
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -68,9 +68,11 @@ logFile = dir('log.mat');
 if ~isempty(logFile)
     load(logFile.name);
     if exist('PAR','var')
-        set(handles.bidRangeMin,'String',num2str(PAR.bidRangeMin));
-        set(handles.bidRangeMax,'String',num2str(PAR.bidRangeMax));
-        set(handles.bidSpeed,'String',num2str(PAR.bidRangeMax));
+        set(handles.bidMeanCost,'Value',PAR.bidMeanCost);
+        set(handles.bidMeanSet,'Value',PAR.bidMeanSet);
+        set(handles.bidMeanSetV,'String',num2str(PAR.bidMeanSetV));
+        set(handles.sigma,'String',num2str(PAR.sigma));
+        set(handles.bidSpeed,'String',num2str(PAR.bidSpeed));
         set(handles.onlookerTimes,'String',num2str(PAR.onlookerTimes));
         set(handles.bidTimes,'String',num2str(PAR.bidTimes));
         set(handles.trialNum,'String',num2str(PAR.trialNum));
@@ -78,6 +80,7 @@ if ~isempty(logFile)
         set(handles.eyelinkRecording,'Value',PAR.eyelinkRecording);
         set(handles.floatCost,'Value',PAR.floatCost);
         set(handles.autoCalibration,'Value',PAR.autoCalibration);
+        set(handles.refreshP,'String',num2str(PAR.refreshP));
     end
 end
 
@@ -269,21 +272,15 @@ function hidden_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of hidden
 hidden = get(handles.hidden,'Value');
 if hidden
-    set(handles.bidRangeMin,'Visible','off');
-    set(handles.bidRangeMax,'Visible','off');
-    set(handles.toText,'Visible','off');
     set(handles.cost,'Visible','off');
     set(handles.floatCost,'Visible','off');
-    set(handles.rangeText,'Visible','off');
     set(handles.costText,'Visible','off');
+    set(handles.bidRange,'Visible','off');
 else
-    set(handles.bidRangeMin,'Visible','on');
-    set(handles.bidRangeMax,'Visible','on');
-    set(handles.toText,'Visible','on');
     set(handles.cost,'Visible','on');
     set(handles.floatCost,'Visible','on');
-    set(handles.rangeText,'Visible','on');
     set(handles.costText,'Visible','on');
+    set(handles.bidRange,'Visible','on')
 end
 
 
@@ -348,6 +345,8 @@ function go_Callback(hObject, eventdata, handles)
 % hObject    handle to go (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+global SCREEN
+
 logFile = dir('log.mat');
 if isempty(logFile)
     errordlg('Please input your screen parameters first.','Error','modal');
@@ -379,16 +378,21 @@ enter     = KbName('Return');
 eyelink = get(handles.eyelinkRecording,'Value');
 
 % extract value
-PAR.bidRangeMin = str2double(get(handles.bidRangeMin,'String'));
-PAR.bidRangeMax = str2double(get(handles.bidRangeMax,'String'));
+PAR.bidMeanCost = get(handles.bidMeanCost,'Value');
+PAR.bidMeanSet = get(handles.bidMeanSet,'Value');
+PAR.bidMeanSetV = str2double(get(handles.bidMeanSetV,'String'));
+PAR.sigma = str2double(get(handles.sigma,'String'));
 PAR.bidSpeed = str2double(get(handles.bidSpeed,'String'));
-PAR.onlookTimes = str2double(get(handles.onlookTimes,'String'));
+PAR.onlookerTimes = str2double(get(handles.onlookerTimes,'String'));
 PAR.bidTimes = str2double(get(handles.bidTimes,'String'));
 PAR.trialNum = str2double(get(handles.trialNum,'String'));
 PAR.cost = str2double(get(handles.cost,'string'));
 PAR.floatCost = get(handles.floatCost,'Value');
+PAR.refreshP = str2double(get(handles.refreshP,'String'));
 PAR.eyelinkRecording = get(handles.eyelinkRecording,'Value');
 PAR.autoCalibration = get(handles.autoCalibration,'Value');
+PAR.adapt = 1;% s
+PAR.costT = 1;% s
 
 PAR.bidInterval = 1; % s
 PAR.trialInterval = 1; % s
@@ -406,7 +410,7 @@ rng(seed);
 
 save('log.mat','SCREEN','PAR','seed');
 
-timePredicted = ((PAR.bidTimes + PAR.onlookTimes)*PAR.bidSpeed + PAR.bidInterval + PAR.trialInterval)  * PAR.trialNum;
+timePredicted = ((PAR.bidTimes + PAR.onlookerTimes)*PAR.bidSpeed + PAR.bidInterval + PAR.trialInterval)  * PAR.trialNum;
 fprintf(1,'This block will cost  ');
 fprintf(2,[num2str(timePredicted/60) ' '] );
 fprintf(1,'minutes \n');
@@ -437,66 +441,43 @@ if max(Screen('Screens')) > 1
 else
     SCREEN.screenId = max(Screen('Screens'));
 end
+
+% Open onscreen window: We request a 32 bit per color component
+% floating point framebuffer if it supports alpha-blendig. Otherwise
+% the system shall fall back to a 16 bit per color component
+% framebuffer:
 PsychImaging('PrepareConfiguration');
+PsychImaging('AddTask', 'General', 'FloatingPoint32BitIfPossible');
+[win , winRect] = PsychImaging('OpenWindow', SCREEN.screenId);
 
-% Define background color:
-whiteBackground = WhiteIndex(SCREEN.screenId);
-blackBackground = BlackIndex(SCREEN.screenId);
-grayBackground = GrayIndex(SCREEN.screenId);
+% We use a normalized color range from now on. All color values are
+% specified as numbers between 0.0 and 1.0, instead of the usual 0 to
+% 255 range. This is more intuitive:
+Screen('ColorRange', win, 1, 0);
 
-% Open a double-buffered full-screen window on the main displays screen.
-[win , winRect] = PsychImaging('OpenWindow', SCREEN.screenId, grayBackground);
 SCREEN.widthPix = winRect(3);
 SCREEN.heightPix = winRect(4);
-SCREEN.center = [SCREEN.widthPix/2, SCREEN.heightPix/2];
+[SCREEN.center(1), SCREEN.center(2)] = RectCenter(winRect);
 
 PAR.noiseSizeH = SCREEN.heightPix/2;
 PAR.noiseSizeW = SCREEN.widthPix/2;
 
-TRIALINFO.fixationSizeP = degree2pix(TRIALINFO.fixationSizeD/2);
-TRIALINFO.fixationPosition = [SCREEN.widthPix/2,SCREEN.heightPix/2];
-
 SCREEN.refreshRate = Screen('NominalFrameRate', SCREEN.screenId);
 
-Screen('BeginOpenGL', win);
-glViewport(0, 0, RectWidth(winRect), RectHeight(winRect));
-glColorMask(GL.TRUE, GL.TRUE, GL.TRUE, GL.TRUE);
-% glEnable(GL_BLEND);
-% glEnable(GL_ALPHA_BLEND_CORRECTLY);
-% glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-Screen('EndOpenGL', win);
-Screen('FillRect', win ,grayBackground,[0 0 SCREEN.widthPix SCREEN.heightPix]);
-Screen('BlendFunction', win, GL_ONE, GL_ZERO);
-
-noiseSreen = Screen('OpenOffscreenWindow', win, [0 0 0 0]);
-% Enable standard additive blending:
-glBlendEquation(GL.FUNC_ADD);
-
-% We use the alpha-channels of the offscreen windows to define the
-% modulationgains for the noise. Example: Alpha value zero = contrast
-% zero. Alpha value 255 = Maximum contrast of 1.0, Alpha value 128 =
-% Contrast of 128/255 == about 50% or 0.5.
-% First we need to initialize the whole windows alpha-channel with the
-% default "background" contrast bgcontrast. We disable alpha-blending
-% for this purpose:
-
-Screen('Blendfunction', noiseSreen, GL_ONE, GL_ZERO);
-Screen('FillRect', noiseSreen, [0 0 0 255 * 1]);
-
-% Now we overdraw some regions of the alpha-channel with our "modulation"
-% image - a image that contains alpha values which encode a different
-% contrast 'fgcontrast'. After this drawing op, the alpha-channel will
-% contain the final "contrast modulation landscape":
-%Screen('DrawDots', positivenoise, [x y], 50, [0 0 0 255 * fgcontrast], [], 1);
-Screen('FillOval', noiseSreen, [0 0 0 255 * fgcontrast], dstrect);
-
-% Now we draw the positivenoise texture and use alpha-blending of
-% the drawn noise color pixels with the destination alpha-channel,
-% thereby multiplying the incoming color values with the stored
-% alpha values -- effectively a contrast modulation:
-Screen('Blendfunction', noiseSreen, GL_DST_ALPHA, GL_ZERO);
+% Fill the whole onscreen window with a neutral 50% intensity
+% background color and an alpha channel value of 'bgcontrast'.
+% This becomes the clear color. After each Screen('Flip'), the
+% backbuffer will be cleared to this neutral 50% intensity gray
+% and a default 'bgcontrast' background noise contrast level:
+Screen('FillRect', win, [0.5 0.5 0.5]);
         
 HideCursor;
+
+% set text font, style and size,etc
+Screen('TextFont',win, 'Tahoma');
+Screen('TextSize',win, 70);
+Screen('TextStyle',win, 1); % 0=normal,1=bold,2=italic,4=underline,8=outline,32=condense,64=extend.
+
 
 %% initial eyelink
 if eyelink
@@ -564,15 +545,238 @@ if eyelink
     pause(1); % wait a little bit, in case the key press during calibration influence the following keyboard check
 end
 
-while triali < PAR.trialNum + 1 
-    noiseMatrix = (randn(PAR.noiseSizeH,PAR.noiseSizeW)+1)/2*255;
+Screen('Flip',win);
+
+triali = 1;
+breakFlag = 0;
+noiseMatrix = randn(PAR.noiseSizeH,PAR.noiseSizeW);
     
-    % The extra zero at the end forcefully disables bilinear filtering. This is
-    % not strictly neccessary on correctly working hardware, but an extra
-    % precaution to make sure that the noise values are blitted
-    % one-to-one into the offscreen window:
-    Screen('DrawTexture', noiseSreen, noiseMatrix, [], [], [], 0);
+frameRateIndex = [];
+PRICE.onlooker = cell(1,PAR.trialNum);
+PRICE.bid = cell(2,PAR.trialNum);
+PRICE.cost = nan(1,PAR.trialNum);
+
+while triali < PAR.trialNum + 1 
+    [~, ~, keycode] = KbCheck;
+    if keycode(escape)
+        breakFlag = 1;
+        break;
+    end
+    if eyelink
+        Eyelink('message', ['Trial Start ' num2str(triali)]);
+        frameN = 1;
+    end
+    
+    % show cost
+    showCostT = tic;
+    if PAR.floatCost
+        cost = ceil(PAR.cost+sqrt(PAR.sigma).*randn());
+    else
+        cost = ceil(PAR.cost);
+    end
+    while toc(showCostT) < PAR.costT
+        drawNoise(win,noiseMatrix)
+        [~, ~, ~] = DrawFormattedText(win, ['Your cost is: ' num2str(cost)],'center','center',[0.2 0.6 0.7],15,0,0,2);
+        Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+        Screen('DrawingFinished',win);
+        
+        Screen('Flip',win,0,0);
+        if eyelink
+            if frameN
+                Eyelink('message',['Show Cost ' num2str(cost) ' in trial ' num2str(traili)]);
+                frameN = 0;
+            end
+        end
+        [~, ~, keycode] = KbCheck;
+        if keycode(escape)
+            breakFlag = 1;
+            break;
+        end
+        [a,b] = size(noiseMatrix);
+        matrixNum = a*b;
+        randM = rand(matrixNum,1);
+        randIndex = randM <= PAR.refreshP/100;
+        noiseMatrix(randIndex) = randn(sum(randIndex),1);
+    end
+    
+    if eyelink
+        Eyelink('message',['Adapt Start ' num2str(triali)]);
+    end
+    
+    adaptTime = tic;
+    % noise background for adapt
+    while toc(adaptTime) < PAR.adapt
+        drawNoise(win,noiseMatrix)
+        Screen('Flip', win);
+        [~, ~, keycode] = KbCheck;
+        if keycode(escape)
+            breakFlag = 1;
+            break;
+        end
+        
+        [a,b] = size(noiseMatrix);
+        matrixNum = a*b;
+        randM = rand(matrixNum,1);
+        randIndex = randM <= PAR.refreshP/100;
+        noiseMatrix(randIndex) = randn(sum(randIndex),1);
+    end
+    
+    if eyelink
+        Eyelink('message',['Adapt Done ' num2str(triali)]);
+    end
+    
+    % onlooker period
+    if PAR.bidMeanCost
+        onlookerPrice = ceil(PAR.cost + sqrt(PAR.sigma).*randn(1,PAR.onlookerTimes));
+    elseif PAR.bidMeanSet
+        onlookerPrice = ceil(PAR.bidMeanSetV + sqrt(PAR.sigma).*randn(1,PAR.onlookerTimes));
+    end
+    for onlookerI = 1:PAR.onlookerTimes
+        onlookerBidT = tic;
+        if eyelink
+            frameN = 1;
+        end
+        while toc(onlookerBidT) < PAR.bidSpeed
+            drawNoise(win,noiseMatrix)
+            [~, ~, ~] = DrawFormattedText(win, num2str(onlookerPrice(onlookerI)),'center','center',[0.5 0.5 0.5]);
+            Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+            Screen('DrawingFinished',win);
+            
+            Screen('Flip',win,0,0);
+            if eyelink
+                if frameN
+                    Eyelink('message',['Onlooker Price Num. ' num2str(onlookerI) ' is ' num2str(onlookerPrice(onlookerI)) ' in trial ' num2str(triali)]);
+                    frameN = 0;
+                end
+            end
+            if keycode(escape)
+                breakFlag = 1;
+                break;
+            end
+            
+            [a,b] = size(noiseMatrix);
+            matrixNum = a*b;
+            randM = rand(matrixNum,1);
+            randIndex = randM <= PAR.refreshP/100;
+            noiseMatrix(randIndex) = randn(sum(randIndex),1);
+        end
+        if breakFlag
+            break
+        end
+    end
+    
+    if breakFlag
+        break
+    end
+    
+    % cue
+    Screen('TextSize',win, 30);
+    adaptTime = tic;
+    while toc(adaptTime) < PAR.adapt
+        drawNoise(win,noiseMatrix)
+        [~, ~, ~] = DrawFormattedText(win, 'You can accept the offer now.','center','center',[0.4 0.7 0.4]);
+        Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+        Screen('DrawingFinished',win);
+        Screen('Flip', win);
+        [~, ~, keycode] = KbCheck;
+        if keycode(escape)
+            breakFlag = 1;
+            break;
+        end
+        
+        [a,b] = size(noiseMatrix);
+        matrixNum = a*b;
+        randM = rand(matrixNum,1);
+        randIndex = randM <= PAR.refreshP/100;
+        noiseMatrix(randIndex) = randn(sum(randIndex),1);
+    end
+    
+    Screen('TextSize',win, 70);
+    if eyelink
+        Eyelink('message',['Adapt Done ' num2str(triali)]);
+    end
+    
+    % bid period
+    if PAR.bidMeanCost
+        bidPrice = ceil(PAR.cost + sqrt(PAR.sigma).*randn(1,PAR.bidTimes));
+    elseif PAR.bidMeanSet
+        bidPrice = ceil(PAR.bidMeanSetV + sqrt(PAR.sigma).*randn(1,PAR.bidTimes));
+    end
+    for bidI = 1:PAR.bidTimes
+        onlookerBidT = tic;
+        if eyelink
+            frameN = 1;
+        end
+        while toc(onlookerBidT) < PAR.bidSpeed
+            drawNoise(win,noiseMatrix)
+            [~, ~, ~] = DrawFormattedText(win, num2str(bidPrice(bidI)),'center','center',[0.5 0.5 0.5]);
+            Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+            Screen('DrawingFinished',win);
+            Screen('Flip',win,0,0);
+            if eyelink
+                if frameN
+                    Eyelink('message',['Bid Price Num. ' num2str(bidI) ' is ' num2str(bidPrice(bidI)) ' in trial ' num2str(triali)]);
+                    frameN = 0;
+                end
+            end
+            [~, ~, keycode] = KbCheck;
+            if keycode(escape)
+                breakFlag = 1;
+                break;
+            elseif keycode(enter)
+                if eyelink
+                    Eyelink('message',['Bid Made As ' num2str(bidPrice(bidI)) ' in trial ' num2str(triali)]);
+                end
+                break
+            end
+            
+            [a,b] = size(noiseMatrix);
+            matrixNum = a*b;
+            randM = rand(matrixNum,1);
+            randIndex = randM <= PAR.refreshP/100;
+            noiseMatrix(randIndex) = randn(sum(randIndex),1);
+        end
+    end
+    
+    if breakFlag
+        break
+    end
+    PRICE.cost(triali) = cost;
+    PRICE.onlooker{triali} = onlookerPrice; 
+    PRICE.bid{1,triali} = bidPrice;
+    PRICE.bid{2,triali} = bidI;
 end
+% frameRate = 1/mean(frameRateIndex);
+% disp(['Frame rate is ' num2str(frameRate)]);
+
+Screen('Flip', win);
+
+if eyelink
+    Eyelink('StopRecording');
+    Eyelink('CloseFile');
+    try
+        fprintf('Receiving data file ''%s''\n',fileName);
+        status=Eyelink('ReceiveFile',tempName ,saveDir,1);
+        if status > 0
+            fprintf('ReceiveFile status %d\n ', status);
+        end
+        if exist(fileName, 'file')==2
+            fprintf('Data file ''%s'' can be found in '' %s\n',fileName, pwd);
+        end
+    catch
+        fprintf('Problem receiving data file ''%s''\n',fileName);
+    end
+    
+    cd (saveDir);
+    save(fullfile(saveDir,fileName));
+    movefile([saveDir,'\',tempName,'.edf'],[saveDir,'\',fileName,'.edf']);
+    
+    % shut down the eyelink
+    Eyelink('ShutDown');
+end
+
+CloseOpenAL;
+Screen('CloseAll');
 
 % --- If Enable == 'on', executes on mouse press in 5 pixel border.
 % --- Otherwise, executes on mouse press in 5 pixel border or over go.
@@ -620,3 +824,90 @@ function pushbutton5_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 screenPar();
+
+
+
+function refreshP_Callback(hObject, eventdata, handles)
+% hObject    handle to refreshP (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of refreshP as text
+%        str2double(get(hObject,'String')) returns contents of refreshP as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function refreshP_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to refreshP (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in bidMeanCost.
+function bidMeanCost_Callback(hObject, eventdata, handles)
+% hObject    handle to bidMeanCost (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of bidMeanCost
+
+
+% --- Executes on button press in bidMeanSet.
+function bidMeanSet_Callback(hObject, eventdata, handles)
+% hObject    handle to bidMeanSet (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of bidMeanSet
+
+
+
+function bidMeanSetV_Callback(hObject, eventdata, handles)
+% hObject    handle to bidMeanSetV (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of bidMeanSetV as text
+%        str2double(get(hObject,'String')) returns contents of bidMeanSetV as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function bidMeanSetV_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to bidMeanSetV (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function sigma_Callback(hObject, eventdata, handles)
+% hObject    handle to sigma (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of sigma as text
+%        str2double(get(hObject,'String')) returns contents of sigma as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function sigma_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to sigma (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
