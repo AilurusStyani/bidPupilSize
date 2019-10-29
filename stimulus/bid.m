@@ -392,7 +392,7 @@ PAR.refreshP = str2double(get(handles.refreshP,'String'));
 PAR.eyelinkRecording = get(handles.eyelinkRecording,'Value');
 PAR.autoCalibration = get(handles.autoCalibration,'Value');
 PAR.adapt = 1;% s
-PAR.costT = 1;% s
+PAR.costT = 2;% s
 
 PAR.bidInterval = 1; % s
 PAR.trialInterval = 1; % s
@@ -416,6 +416,21 @@ fprintf(2,[num2str(timePredicted/60) ' '] );
 fprintf(1,'minutes \n');
 
 disp('Continue?')
+try
+    [winS,winF] = audioread('coins.wav');
+    winSound = 1;
+catch
+    warning('Sound file ''coins.wav'' can''t found in this floder.')
+    winSound = 0;
+end
+
+try
+    [loseS,loseF] = audioread('ohNo.wav');
+    loseSound = 1;
+catch
+    warning('Sound file ''onHo.wav'' can''t found in this floder.')
+    loseSound = 0;
+end
 
 % terminate the block if you feel it is too long
 tic
@@ -475,7 +490,6 @@ HideCursor;
 
 % set text font, style and size,etc
 Screen('TextFont',win, 'Tahoma');
-Screen('TextSize',win, 70);
 Screen('TextStyle',win, 1); % 0=normal,1=bold,2=italic,4=underline,8=outline,32=condense,64=extend.
 
 
@@ -555,7 +569,7 @@ frameRateIndex = [];
 PRICE.onlooker = cell(1,PAR.trialNum);
 PRICE.bid = cell(2,PAR.trialNum);
 PRICE.cost = nan(1,PAR.trialNum);
-
+balance = 0;
 while triali < PAR.trialNum + 1 
     [~, ~, keycode] = KbCheck;
     if keycode(escape)
@@ -575,7 +589,8 @@ while triali < PAR.trialNum + 1
         cost = ceil(PAR.cost);
     end
     while toc(showCostT) < PAR.costT
-        drawNoise(win,noiseMatrix)
+        drawNoise(win,noiseMatrix);
+        Screen('TextSize',win, 70/1280*SCREEN.widthPix);
         [~, ~, ~] = DrawFormattedText(win, ['Your cost is: ' num2str(cost)],'center','center',[0.2 0.6 0.7],15,0,0,2);
         Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
         Screen('DrawingFinished',win);
@@ -622,7 +637,7 @@ while triali < PAR.trialNum + 1
     end
     
     if eyelink
-        Eyelink('message',['Adapt Done ' num2str(triali)]);
+        Eyelink('message',['Adapt 1 Done ' num2str(triali)]);
     end
     
     % onlooker period
@@ -637,7 +652,8 @@ while triali < PAR.trialNum + 1
             frameN = 1;
         end
         while toc(onlookerBidT) < PAR.bidSpeed
-            drawNoise(win,noiseMatrix)
+            drawNoise(win,noiseMatrix);
+            Screen('TextSize',win, 70/1280*SCREEN.widthPix);
             [~, ~, ~] = DrawFormattedText(win, num2str(onlookerPrice(onlookerI)),'center','center',[0.5 0.5 0.5]);
             Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
             Screen('DrawingFinished',win);
@@ -670,11 +686,11 @@ while triali < PAR.trialNum + 1
     end
     
     % cue
-    Screen('TextSize',win, 30);
     adaptTime = tic;
     while toc(adaptTime) < PAR.adapt
-        drawNoise(win,noiseMatrix)
-        [~, ~, ~] = DrawFormattedText(win, 'You can accept the offer now.','center','center',[0.4 0.7 0.4]);
+        drawNoise(win,noiseMatrix);
+        Screen('TextSize',win, 50/1280*SCREEN.widthPix);
+        [~, ~, ~] = DrawFormattedText(win, 'Now you can accept the offer.','center','center',[0.15 0.85 0.2],15,0,0,2);
         Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
         Screen('DrawingFinished',win);
         Screen('Flip', win);
@@ -691,12 +707,31 @@ while triali < PAR.trialNum + 1
         noiseMatrix(randIndex) = randn(sum(randIndex),1);
     end
     
-    Screen('TextSize',win, 70);
+    adaptTime = tic;
+    % noise background for adapt
+    while toc(adaptTime) < PAR.adapt
+        drawNoise(win,noiseMatrix)
+        Screen('Flip', win);
+        [~, ~, keycode] = KbCheck;
+        if keycode(escape)
+            breakFlag = 1;
+            break;
+        end
+        
+        [a,b] = size(noiseMatrix);
+        matrixNum = a*b;
+        randM = rand(matrixNum,1);
+        randIndex = randM <= PAR.refreshP/100;
+        noiseMatrix(randIndex) = randn(sum(randIndex),1);
+    end
+    
+    
     if eyelink
-        Eyelink('message',['Adapt Done ' num2str(triali)]);
+        Eyelink('message',['Adapt 2 Done ' num2str(triali)]);
     end
     
     % bid period
+    offerAccept = 0;
     if PAR.bidMeanCost
         bidPrice = ceil(PAR.cost + sqrt(PAR.sigma).*randn(1,PAR.bidTimes));
     elseif PAR.bidMeanSet
@@ -709,13 +744,14 @@ while triali < PAR.trialNum + 1
         end
         while toc(onlookerBidT) < PAR.bidSpeed
             drawNoise(win,noiseMatrix)
+            Screen('TextSize',win, 70/1280*SCREEN.widthPix);
             [~, ~, ~] = DrawFormattedText(win, num2str(bidPrice(bidI)),'center','center',[0.5 0.5 0.5]);
             Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
             Screen('DrawingFinished',win);
             Screen('Flip',win,0,0);
             if eyelink
                 if frameN
-                    Eyelink('message',['Bid Price Num. ' num2str(bidI) ' is ' num2str(bidPrice(bidI)) ' in trial ' num2str(triali)]);
+                    Eyelink('message',['Num. ' num2str(bidI) ' Bid Price is ' num2str(bidPrice(bidI)) ' in trial ' num2str(triali)]);
                     frameN = 0;
                 end
             end
@@ -725,8 +761,11 @@ while triali < PAR.trialNum + 1
                 break;
             elseif keycode(enter)
                 if eyelink
-                    Eyelink('message',['Bid Made As ' num2str(bidPrice(bidI)) ' in trial ' num2str(triali)]);
+                    Eyelink('message',['Offer accepted As ' num2str(bidPrice(bidI)) ' in trial ' num2str(triali)]);
                 end
+                offerAccept = 1;
+                acceptPrice = bidPrice(bidI);
+                topUp = acceptPrice - cost;
                 break
             end
             
@@ -736,15 +775,63 @@ while triali < PAR.trialNum + 1
             randIndex = randM <= PAR.refreshP/100;
             noiseMatrix(randIndex) = randn(sum(randIndex),1);
         end
+        if breakFlag
+            break
+        elseif offerAccept
+            break
+        end
     end
     
     if breakFlag
         break
     end
-    PRICE.cost(triali) = cost;
-    PRICE.onlooker{triali} = onlookerPrice; 
-    PRICE.bid{1,triali} = bidPrice;
-    PRICE.bid{2,triali} = bidI;
+    if offerAccept
+        PRICE.cost(triali) = cost;
+        PRICE.onlooker{triali} = onlookerPrice;
+        PRICE.bid{1,triali} = bidPrice;
+        PRICE.bid{2,triali} = bidI;
+        
+        if topUp>=0
+            if winSound
+                sound(winS,winF);
+            end
+        elseif topUp < 0
+            if loseSound
+                sound(loseS,loseF)
+            end
+        end
+        
+        addIndex = ceil(0:topUp/(SCREEN.refreshRate*2):topUp);
+        % noise background for adapt
+        for topUpi = 1:length(addIndex)
+            drawNoise(win,noiseMatrix)
+            Screen('TextSize',win, 70/1280*SCREEN.widthPix);
+            if topUp>=0
+                [~, ~, ~] = DrawFormattedText(win, num2str(balance+addIndex(topUpi)),'center','center',[0.2 0.8 0.2]);
+            else
+                [~, ~, ~] = DrawFormattedText(win, num2str(balance+addIndex(topUpi)),'center','center',[0.8 0.2 0.2]);
+            end
+            Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+            Screen('DrawingFinished',win);
+            Screen('Flip', win);
+            [~, ~, keycode] = KbCheck;
+            if keycode(escape)
+                breakFlag = 1;
+                break;
+            end
+            
+            [a,b] = size(noiseMatrix);
+            matrixNum = a*b;
+            randM = rand(matrixNum,1);
+            randIndex = randM <= PAR.refreshP/100;
+            noiseMatrix(randIndex) = randn(sum(randIndex),1);
+        end
+        balance = balance + topUp;
+        clear sound
+    else
+        Eyelink('message',['Trial abort ' num2str(triali)]);
+    end
+    triali = triali+1;
 end
 % frameRate = 1/mean(frameRateIndex);
 % disp(['Frame rate is ' num2str(frameRate)]);
