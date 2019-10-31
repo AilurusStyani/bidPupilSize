@@ -468,7 +468,10 @@ PsychImaging('AddTask', 'General', 'FloatingPoint32BitIfPossible');
 % We use a normalized color range from now on. All color values are
 % specified as numbers between 0.0 and 1.0, instead of the usual 0 to
 % 255 range. This is more intuitive:
-Screen('ColorRange', win, 1, 0);
+% Screen('ColorRange', win, 1, 0);
+
+% Screen('BlendFunction', win, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+% Screen('BlendFunction', win, GL_SRC_ALPHA, GL_ONE);
 
 SCREEN.widthPix = winRect(3);
 SCREEN.heightPix = winRect(4);
@@ -478,20 +481,30 @@ PAR.noiseSizeH = SCREEN.heightPix/2;
 PAR.noiseSizeW = SCREEN.widthPix/2;
 
 SCREEN.refreshRate = Screen('NominalFrameRate', SCREEN.screenId);
-
+grayColor = GrayIndex(win);
 % Fill the whole onscreen window with a neutral 50% intensity
 % background color and an alpha channel value of 'bgcontrast'.
 % This becomes the clear color. After each Screen('Flip'), the
 % backbuffer will be cleared to this neutral 50% intensity gray
 % and a default 'bgcontrast' background noise contrast level:
-Screen('FillRect', win, [0.5 0.5 0.5]);
-        
+Screen('FillRect', win, grayColor);
+
+imgSize = min(SCREEN.widthPix,SCREEN.heightPix)/5;
+% image:
+% bag; bike; cake; chair; earphone; HDD; lipstick; microwave; pingpang; shoes; wine
+imgFileName = {'bag.png','bike.png','cake.png','chair.png','earphone.png', 'HDD.png', 'lipstick.png', 'microwave.png', 'pingpang.png', 'shoes.png', 'wine.png'};
+img = cell(size(imgFileName));
+imgT = cell(size(imgFileName));
+for i = 1:length(imgFileName)
+    [img{i},map,imgT{i}] = imread(fullfile(pwd,'sources',imgFileName{i}),'png');
+    img{i} = imresize(img{i},[imgSize,imgSize],'nearest'); imgT{i} = imresize(imgT{i},[imgSize,imgSize],'nearest');
+end
+
 HideCursor;
 
 % set text font, style and size,etc
 Screen('TextFont',win, 'Tahoma');
 Screen('TextStyle',win, 1); % 0=normal,1=bold,2=italic,4=underline,8=outline,32=condense,64=extend.
-
 
 %% initial eyelink
 if eyelink
@@ -570,6 +583,7 @@ PRICE.onlooker = cell(1,PAR.trialNum);
 PRICE.bid = cell(2,PAR.trialNum);
 PRICE.cost = nan(1,PAR.trialNum);
 balance = 0;
+
 while triali < PAR.trialNum + 1 
     [~, ~, keycode] = KbCheck;
     if keycode(escape)
@@ -588,11 +602,18 @@ while triali < PAR.trialNum + 1
     else
         cost = ceil(PAR.cost);
     end
+    imgN = mod(triali,length(img));
+    imgH=Screen('MakeTexture', win, img{imgN});
+    
     while toc(showCostT) < PAR.costT
-        drawNoise(win,noiseMatrix);
+%         drawNoise(win,noiseMatrix);
         Screen('TextSize',win, 70/1280*SCREEN.widthPix);
-        [~, ~, ~] = DrawFormattedText(win, ['Your cost is: ' num2str(cost)],'center','center',[0.2 0.6 0.7],15,0,0,2);
-        Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+%         [~, ~, ~] = DrawFormattedText(win, ['Your cost is: ' num2str(cost)],'center','center',[0.2 0.6 0.7]*255,15,0,0,2);
+        [~, ~, ~] = DrawFormattedText(win, 'Your product is: ','center',SCREEN.heightPix/5*2,[0.2 0.6 0.7]*255);
+        [~, ~, ~] = DrawFormattedText(win, num2str(cost),SCREEN.widthPix/5*3,SCREEN.heightPix/5*3,[0.2 0.6 0.7]*255,15,0,0,2);
+        Screen('TextBackgroundColor',win, grayColor);
+        
+        Screen('DrawTexture', win, imgH, [], [SCREEN.widthPix/2-imgSize,SCREEN.heightPix/2,SCREEN.widthPix/2,SCREEN.heightPix/2+imgSize],[],[],[]);%,imgT{imgN});
         Screen('DrawingFinished',win);
         
         Screen('Flip',win,0,0);
@@ -607,11 +628,11 @@ while triali < PAR.trialNum + 1
             breakFlag = 1;
             break;
         end
-        [a,b] = size(noiseMatrix);
-        matrixNum = a*b;
-        randM = rand(matrixNum,1);
-        randIndex = randM <= PAR.refreshP/100;
-        noiseMatrix(randIndex) = randn(sum(randIndex),1);
+%         [a,b] = size(noiseMatrix);
+%         matrixNum = a*b;
+%         randM = rand(matrixNum,1);
+%         randIndex = randM <= PAR.refreshP/100;
+%         noiseMatrix(randIndex) = randn(sum(randIndex),1);
     end
     
     if eyelink
@@ -654,8 +675,8 @@ while triali < PAR.trialNum + 1
         while toc(onlookerBidT) < PAR.bidSpeed
             drawNoise(win,noiseMatrix);
             Screen('TextSize',win, 70/1280*SCREEN.widthPix);
-            [~, ~, ~] = DrawFormattedText(win, num2str(onlookerPrice(onlookerI)),'center','center',[0.5 0.5 0.5]);
-            Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+            [~, ~, ~] = DrawFormattedText(win, num2str(onlookerPrice(onlookerI)),'center','center',grayColor);
+            Screen('TextBackgroundColor',win, grayColor);
             Screen('DrawingFinished',win);
             
             Screen('Flip',win,0,0);
@@ -690,8 +711,8 @@ while triali < PAR.trialNum + 1
     while toc(adaptTime) < PAR.adapt
         drawNoise(win,noiseMatrix);
         Screen('TextSize',win, 50/1280*SCREEN.widthPix);
-        [~, ~, ~] = DrawFormattedText(win, 'Now you can accept the offer.','center','center',[0.15 0.85 0.2],15,0,0,2);
-        Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+        [~, ~, ~] = DrawFormattedText(win, 'Now you can accept the offer.','center','center',[0.15 0.85 0.2]*255,15,0,0,2);
+        Screen('TextBackgroundColor',win, grayColor );
         Screen('DrawingFinished',win);
         Screen('Flip', win);
         [~, ~, keycode] = KbCheck;
@@ -745,8 +766,8 @@ while triali < PAR.trialNum + 1
         while toc(onlookerBidT) < PAR.bidSpeed
             drawNoise(win,noiseMatrix)
             Screen('TextSize',win, 70/1280*SCREEN.widthPix);
-            [~, ~, ~] = DrawFormattedText(win, num2str(bidPrice(bidI)),'center','center',[0.5 0.5 0.5]);
-            Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+            [~, ~, ~] = DrawFormattedText(win, num2str(bidPrice(bidI)),'center','center',grayColor );
+            Screen('TextBackgroundColor',win, grayColor );
             Screen('DrawingFinished',win);
             Screen('Flip',win,0,0);
             if eyelink
@@ -807,11 +828,11 @@ while triali < PAR.trialNum + 1
             drawNoise(win,noiseMatrix)
             Screen('TextSize',win, 70/1280*SCREEN.widthPix);
             if topUp>=0
-                [~, ~, ~] = DrawFormattedText(win, num2str(balance+addIndex(topUpi)),'center','center',[0.2 0.8 0.2]);
+                [~, ~, ~] = DrawFormattedText(win, num2str(balance+addIndex(topUpi)),'center','center',[0.2 0.8 0.2]*255);
             else
-                [~, ~, ~] = DrawFormattedText(win, num2str(balance+addIndex(topUpi)),'center','center',[0.8 0.2 0.2]);
+                [~, ~, ~] = DrawFormattedText(win, num2str(balance+addIndex(topUpi)),'center','center',[0.8 0.2 0.2]*255);
             end
-            Screen('TextBackgroundColor',win, [0.5 0.5 0.5 1]);
+            Screen('TextBackgroundColor',win, grayColor );
             Screen('DrawingFinished',win);
             Screen('Flip', win);
             [~, ~, keycode] = KbCheck;
@@ -829,7 +850,9 @@ while triali < PAR.trialNum + 1
         balance = balance + topUp;
         clear sound
     else
-        Eyelink('message',['Trial abort ' num2str(triali)]);
+        if eyelink
+            Eyelink('message',['Trial abort ' num2str(triali)]);
+        end
     end
     triali = triali+1;
 end
