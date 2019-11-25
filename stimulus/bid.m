@@ -683,8 +683,8 @@ while triali < PAR.trialNum + 1
             Screen('TextSize',win, ceil(70/1280*SCREEN.widthPix));
             [~, ~, ~] = DrawFormattedText(win, num2str(onlookerPrice(onlookerI)),'center','center',grayColor);
             Screen('TextBackgroundColor',win, grayColor);
-            Screen('DrawingFinished',win);
             
+            Screen('DrawingFinished',win);
             Screen('Flip',win,0,0);
             if eyelink
                 if frameN
@@ -780,6 +780,7 @@ while triali < PAR.trialNum + 1
             Screen('TextSize',win, ceil(70/1280*SCREEN.widthPix));
             [~, ~, ~] = DrawFormattedText(win, num2str(bidPrice(bidI)),'center','center',grayColor );
             Screen('TextBackgroundColor',win, grayColor );
+            Screen('DrawLine', win, grayColor, SCREEN.widthPix/5*2, SCREEN.heightPix/5*3, SCREEN.widthPix/5*3, SCREEN.heightPix/5*3,8);
             Screen('DrawingFinished',win);
             Screen('Flip',win,0,0);
             if eyelink
