@@ -473,8 +473,8 @@ Screen('ColorRange', win, 1, 0);
 % Screen('BlendFunction', win, GL_SRC_ALPHA, GL_ONE);
 % Screen('Blendfunction', win, GL_ONE, GL_ONE);
 
-SCREEN.widthPix = winRect(3);
-SCREEN.heightPix = winRect(4);
+SCREEN.widthPix  = ceil(winRect(3)/10)*10;
+SCREEN.heightPix = ceil(winRect(4)/10)*10;
 [SCREEN.center(1), SCREEN.center(2)] = RectCenter(winRect);
 
 PAR.noiseSizeH = SCREEN.heightPix/2;
