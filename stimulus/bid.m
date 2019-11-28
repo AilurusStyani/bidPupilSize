@@ -624,7 +624,7 @@ while triali < PAR.trialNum + 1
         Screen('Flip',win,0,0);
         if eyelink
             if frameN
-                Eyelink('message',['Show Cost ' num2str(cost) ' in trial ' num2str(traili)]);
+                Eyelink('message',['Show Cost ' num2str(cost) ' in trial ' num2str(triali)]);
                 frameN = 0;
             end
         end
