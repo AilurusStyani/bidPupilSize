@@ -66,7 +66,7 @@ imshow(dollarImg2);
 
 logFile = dir('log.mat');
 if ~isempty(logFile)
-    load(logFile.name);
+    load(logFile(1).name);
     if exist('PAR','var')
         set(handles.bidMeanCost,'Value',PAR.bidMeanCost);
         set(handles.bidMeanFloat,'Value',PAR.bidMeanFloat);
@@ -355,9 +355,11 @@ else
 end
 
 subjectName = get(handles.subjectName,'String');
+subjectName = strrep(subjectName,' ',''); % delete blank space
 if isempty(subjectName)
     subjectName = 'test';
 end
+
 fileName = ['bid_' subjectName '_' datestr(now,'yymmddHHMM')];
 saveDir = fullfile(pwd,'data');
 mkdir(saveDir);
